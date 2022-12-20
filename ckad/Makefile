@@ -4,7 +4,8 @@ CONTEXT=kind-${CLUSTER_NAME}
 .PHONY: up
 up:
 	kind create cluster --name ${CLUSTER_NAME} --config kind-cluster-config.yaml && \
-	$(MAKE) deploy-nginx-ingress
+	$(MAKE) deploy-nginx-ingress && \
+	$(MAKE) setup-cluster
 
 .PHONY: down
 down:
@@ -15,3 +16,6 @@ down:
 deploy-nginx-ingress:
 	kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml --context ${CONTEXT}
 
+.PHONY: setup-cluster
+setup-cluster:
+	kubectl apply -f cluster-resources.yaml --context $(CONTEXT)
