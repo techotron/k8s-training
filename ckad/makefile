@@ -1,0 +1,17 @@
+CLUSTER_NAME=kind-ckad
+CONTEXT=kind-${CLUSTER_NAME}
+
+.PHONY: up
+up:
+	kind create cluster --name ${CLUSTER_NAME} --config kind-cluster-config.yaml && \
+	$(MAKE) deploy-nginx-ingress
+
+.PHONY: down
+down:
+	kind delete cluster --name ${CLUSTER_NAME}
+
+
+.PHONY: deploy-nginx-ingress
+deploy-nginx-ingress:
+	kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml --context ${CONTEXT}
+
