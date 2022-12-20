@@ -2,6 +2,7 @@
 ## Kind
 ### Running Locally
 **Bring the cluster up**
+
 This will create a cluster and add an Nginx ingress controller. The controller container takes a little while to start up so if you're planning on testing it, check the status of the pods with `kubectl get pods -n ingress-nginx`. 
 
 ```bash
@@ -19,6 +20,7 @@ kubectl config use-context kind-kind-ckad
 ```
 
 **Delete the cluster**
+
 ```bash
 make down
 ```
