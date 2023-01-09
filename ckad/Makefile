@@ -5,6 +5,7 @@ CONTEXT=kind-${CLUSTER_NAME}
 up:
 	kind create cluster --name ${CLUSTER_NAME} --config kind-cluster-config.yaml && \
 	$(MAKE) deploy-nginx-ingress && \
+	sleep 60 && \
 	$(MAKE) setup-cluster
 
 .PHONY: down
