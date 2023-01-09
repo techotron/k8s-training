@@ -137,3 +137,305 @@ metadata:
   labels:
     kubernetes.io/metadata.name: init
   name: init
+
+# Volumes #######################
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    kubernetes.io/metadata.name: volumes-setup
+  name: volumes-setup
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    kubernetes.io/metadata.name: volumes
+  name: volumes
+---
+# Daemonset is used here to just add a file on each of the worker nodes for the hostPath question. Ideally this would be a "daemonset job" but such a resource doesn't exist
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: create-host-path-data
+  namespace: volumes-setup
+spec:
+  selector:
+    matchLabels:
+      name: create-host-path-data
+  template:
+    metadata:
+      labels:
+        name: create-host-path-data
+    spec:
+      containers:
+      - command: ["sh", "-c", "date > /app/data.log && "]
+        image: busybox:stable
+        name: create-host-path-data
+        volumeMounts:
+        - name: host-data
+          mountPath: /app/data.log
+      volumes:
+      - name: host-data
+        hostPath:
+          path: /etc/data.log
+          type: FileOrCreate
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: hostpath-pv
+spec:
+  capacity:
+    storage: 100Mi
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: slow
+  hostPath:
+    path: /etc/persistentVol
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    kubernetes.io/metadata.name: deployments
+  name: deployments
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: rolling-deploy
+  name: rolling-deploy
+  namespace: deployments
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: rolling-deploy
+  template:
+    metadata:
+      labels:
+        app: rolling-deploy
+    spec:
+      containers:
+      - image: nginx:1.22
+        name: nginx
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blue-config
+  namespace: deployments
+data:
+  index.html: |
+    this is the BLUE deployment
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: green-config
+  namespace: deployments
+data:
+  index.html: |
+    this is the GREEN deployment
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: main-config
+  namespace: deployments
+data:
+  index.html: |
+    this is the MAIN deployment
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: canary-config
+  namespace: deployments
+data:
+  index.html: |
+    this is the CANARY deployment
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blue-deploy
+  namespace: deployments
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bluegreen-deploy
+      colour: blue
+  template:
+    metadata:
+      labels:
+        app: bluegreen-deploy
+        colour: blue
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:stable
+        volumeMounts:
+        - name: config
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: config
+        configMap:
+          name: blue-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: green-deploy
+  namespace: deployments
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bluegreen-deploy
+      colour: green
+  template:
+    metadata:
+      labels:
+        app: bluegreen-deploy
+        colour: green
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:stable
+        volumeMounts:
+        - name: config
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: config
+        configMap:
+          name: green-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bluegreen-svc
+  namespace: deployments
+spec:
+  selector:
+    app: bluegreen-deploy
+    colour: blue
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  name: bluegreen-ingress
+  namespace: deployments
+spec:
+  rules:
+  - http:
+      paths:
+      - backend:
+          service:
+            name: bluegreen-svc
+            port:
+              number: 80
+        path: /bluegreen
+        pathType: Prefix
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: main-deploy
+  namespace: deployments
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: canary-example
+      environment: main
+  template:
+    metadata:
+      labels:
+        app: canary-example
+        environment: main
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:stable
+        volumeMounts:
+        - name: config
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: config
+        configMap:
+          name: main-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: canary-deploy
+  namespace: deployments
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: canary-example
+      environment: canary
+  template:
+    metadata:
+      labels:
+        app: canary-example
+        environment: canary
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:stable
+        volumeMounts:
+        - name: config
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: config
+        configMap:
+          name: canary-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: canary-svc
+  namespace: deployments
+spec:
+  selector:
+    app: canary-example
+    environment: main
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  name: canary-ingress
+  namespace: deployments
+spec:
+  rules:
+  - http:
+      paths:
+      - backend:
+          service:
+            name: canary-svc
+            port:
+              number: 80
+        path: /canary
+        pathType: Prefix
+
