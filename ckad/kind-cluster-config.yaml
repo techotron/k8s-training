@@ -4,7 +4,7 @@ apiVersion: kind.x-k8s.io/v1alpha4
 # As of Dec-2022, version 1.25 is used in the exam
 nodes:
 - role: control-plane
-  image: kindest/node:v1.25.0
+  image: kindest/node:v1.28.0
   # Deploy an ingress controller
   kubeadmConfigPatches:
   - |
@@ -20,8 +20,8 @@ nodes:
     hostPort: 443
     protocol: TCP        
 - role: worker
-  image: kindest/node:v1.25.0
+  image: kindest/node:v1.28.0
 - role: worker
-  image: kindest/node:v1.25.0
+  image: kindest/node:v1.28.0
 - role: worker
-  image: kindest/node:v1.25.0
+  image: kindest/node:v1.28.0
