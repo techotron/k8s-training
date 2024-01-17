@@ -1,7 +1,7 @@
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 # 1 control plane node and 3 workers
-# As of Dec-2022, version 1.25 is used in the exam
+# As of Jan-2024, version 1.28 is used in the exam
 nodes:
 - role: control-plane
   image: kindest/node:v1.28.0
