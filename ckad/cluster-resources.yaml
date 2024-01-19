@@ -170,7 +170,7 @@ spec:
         name: create-host-path-data
     spec:
       containers:
-      - command: ["sh", "-c", "date > /app/data.log && "]
+      - command: ["sh", "-c", "date > /app/data.log && while true; do sleep 1; done"]
         image: busybox:stable
         name: create-host-path-data
         volumeMounts:
