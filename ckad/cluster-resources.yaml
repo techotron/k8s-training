@@ -195,6 +195,8 @@ spec:
   hostPath:
     path: /etc/persistentVol
     type: DirectoryOrCreate
+
+# Deployments #######################
 ---
 apiVersion: v1
 kind: Namespace
@@ -439,3 +441,316 @@ spec:
         path: /canary
         pathType: Prefix
 
+# Monitoring #######################
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    kubernetes.io/metadata.name: monitoring
+  name: monitoring
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: cpu-pod
+  name: cpu-pod
+  namespace: monitoring
+spec:
+  containers:
+  - image: gcr.io/k8s-staging-e2e-test-images/resource-consumer:1.9
+    name: resource-container
+  - image: radial/busyboxplus:curl
+    name: busybox-sidecar
+    command: ['/bin/sh', '-c', 'until curl localhost:8080/ConsumeCPU -d "millicores=500&durationSec=3600"; do sleep 5; done && while true; do sleep 10; done']
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: failing-pod
+  name: failing-pod
+  namespace: monitoring
+spec:
+  containers:
+  - image: linuxacademycontent/random-crashing-web-server:1
+    name: failing-pod
+  - image: radial/busyboxplus:curl
+    name: busybox-sidecar
+    command: ['/bin/sh', '-c', 'while true; do curl -i http://localhost:8080/ && sleep 1; done']    
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: broken-pod
+  name: broken-pod
+  namespace: monitoring
+spec:
+  containers:
+  - image: nginx:stable.z
+    name: broken-pod
+    livenessProbe:
+      httpGet:
+        path: /
+        port: 81
+      initialDelaySeconds: 5
+      periodSeconds: 5
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+
+# Custom Resource Definitions #######################
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    kubernetes.io/metadata.name: crds
+  name: crds
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: beehives.esnow.uk
+spec:
+  group: esnow.uk
+  names:
+    kind: BeeHive
+    plural: beehives
+    singular: beehive
+    shortNames:
+    - hive
+  scope: Namespaced
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              bees:
+                type: integer
+              supers:
+                type: integer
+
+# Security #######################
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    kubernetes.io/metadata.name: security
+  name: security   
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: my-broken-sa
+  namespace: security
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: sa-pod
+  name: sa-pod
+  namespace: security
+spec:
+  containers:
+  - image: radial/busyboxplus:curl
+    name: sa-pod
+    command: ['/bin/sh', '-c', 'while true; do curl -s --header "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt https://$KUBERNETES_SERVICE_HOST/api/v1/namespaces/security/pods && sleep 1; done']
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+  serviceAccountName: my-broken-sa
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: list-pods-role
+  namespace: security
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["list"]
+
+# Resources #######################
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    kubernetes.io/metadata.name: resources
+  name: resources
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: running-pod
+  namespace: resources
+spec:
+  containers:
+  - name: running-pod
+    image: busybox:stable
+    command: ["sh", "-c", "while true; do echo 'Running...' sleep 1; done"]
+    resources:
+      requests:
+        cpu: 200m
+        memory: 64Mi
+      limits:
+        cpu: 300m
+        memory: 100Mi
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: resources-quota
+  namespace: resources
+spec:
+  hard:
+    requests.memory: 128Mi
+    requests.cpu: 500m
+    limits.memory: 256Mi
+    limits.cpu: "1"
+
+# Config Maps and Secrets #######################
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    kubernetes.io/metadata.name: configs
+  name: configs
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-configmap
+  namespace: configs
+data:
+  myapp_message: My message is Hello, World!
+  app.cfg: |
+    # A config file
+    key1=value1
+    key2=value2
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: secret-pod
+  name: secret-pod
+  namespace: configs
+spec:
+  containers:
+  - image: busybox:stable
+    name: secret-pod
+    command: ["sh", "-c", "while true; sleep 1; done"]
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+
+# Network Policies #######################
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    kubernetes.io/metadata.name: np-test-a
+    team: ateam
+  name: np-test-a
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    kubernetes.io/metadata.name: np-test-b
+    team: bteam
+  name: np-test-b
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: server-pod
+  namespace: np-test-a
+  labels:
+    app: np-test-server
+spec:
+  containers:
+  - name: nginx
+    image: nginx:stable
+    ports:
+    - containerPort: 80
+
+# Services #######################
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    kubernetes.io/metadata.name: services
+  name: services
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: server-pod
+  namespace: services
+  labels:
+    app: nginx-server
+spec:
+  containers:
+  - name: nginx
+    image: nginx:stable
+    ports:
+    - containerPort: 80
+
+# Ingress #######################
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    kubernetes.io/metadata.name: ingress
+  name: ingress
+---
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: server-pod
+  namespace: ingress
+  labels:
+    app: nginx-server
+spec:
+  containers:
+  - name: nginx
+    image: nginx:stable
+    ports:
+    - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingress-svc
+  namespace: ingress
+spec:
+  selector:
+    app: nginx-server
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
