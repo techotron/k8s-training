@@ -637,6 +637,32 @@ metadata:
   name: configs
 ---
 apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: configmap-pod
+  name: configmap-pod
+  namespace: configs
+spec:
+  containers:
+  - image: busybox:stable
+    name: configmap-pod
+    command: ["/bin/sh", "-c", "while true; do echo $CM_DATA_MESSAGE && cat /data/app.cfg && sleep 1; done"]
+    envFrom:
+      - configMapRef:
+          name: my-configmap
+        prefix: CM_DATA_
+    volumeMounts:
+      - name: my-cm-vol
+        mountPath: /data/app.cfg
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+  volumes:
+    - name: my-cm-vol
+      configMap:
+        name: my-configmap
+---
+apiVersion: v1
 kind: ConfigMap
 metadata:
   name: my-configmap
