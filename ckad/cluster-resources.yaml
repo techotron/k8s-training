@@ -685,7 +685,7 @@ spec:
   containers:
   - image: busybox:stable
     name: secret-pod
-    command: ["sh", "-c", "while true; sleep 1; done"]
+    command: ["sh", "-c", "while true; do sleep 1; done"]
   dnsPolicy: ClusterFirst
   restartPolicy: Always
 
